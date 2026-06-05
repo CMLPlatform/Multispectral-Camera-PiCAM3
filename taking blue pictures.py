@@ -1,7 +1,29 @@
 import numpy as np
-from picamera2 import Picamera2
 import cv2
+from picamera2 import Picamera2
 import time
+
+def unpack_raw10(buffer, width, height):
+    data = np.frombuffer(buffer, dtype=np.uint8)
+    num_pixels = width * height
+    unpacked = np.zeros(num_pixels, dtype=np.uint16)
+
+    j = 0
+    for i in range(0, len(data), 5):
+        b0 = data[i]
+        b1 = data[i+1]
+        b2 = data[i+2]
+        b3 = data[i+3]
+        b4 = data[i+4]
+
+        unpacked[j]   = ((b0 << 2) | ((b4 >> 0) & 0x3))
+        unpacked[j+1] = ((b1 << 2) | ((b4 >> 2) & 0x3))
+        unpacked[j+2] = ((b2 << 2) | ((b4 >> 4) & 0x3))
+        unpacked[j+3] = ((b3 << 2) | ((b4 >> 6) & 0x3))
+        j += 4
+
+    return unpacked.reshape((height, width))
+
 
 picam2 = Picamera2()
 
@@ -16,24 +38,20 @@ time.sleep(2)
 
 request = picam2.capture_request()
 
-# Use buffer (true raw)
+# Get packed RAW buffer
 raw_buffer = request.make_buffer("raw")
 request.release()
 
-# Convert to numpy
-raw_array = np.frombuffer(raw_buffer, dtype=np.uint16)
-
-# Known resolution from your logs
 width = 4608
 height = 2592
 
-# Reshape
-raw_image = raw_array[:width * height].reshape((height, width))
+#Unpack properly
+raw_image = unpack_raw10(raw_buffer, width, height)
 
 print("Shape:", raw_image.shape)
 print("Range:", raw_image.min(), raw_image.max())
 
-# Extract blue (BGGR)
+#Extract blue (BGGR)
 blue = raw_image[0::2, 0::2]
 
 # Normalize for viewing
