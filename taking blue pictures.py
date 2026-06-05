@@ -3,44 +3,39 @@ import cv2
 from picamera2 import Picamera2
 import time
 
-# Initialize camera
 picam2 = Picamera2()
 
-# Configure for RAW capture
+# Configure RAW capture only (avoid unnecessary ISP load)
 config = picam2.create_still_configuration(
+    main={"size": (1920, 1080)},  # optional preview
     raw={"size": picam2.sensor_resolution}
 )
 
 picam2.configure(config)
 picam2.start()
 
-# Allow camera to settle
 time.sleep(2)
 
-# Capture RAW image
+# Capture RAW frame
 request = picam2.capture_request()
 raw = request.make_array("raw")
 request.release()
 
-# RAW image is likely 12-bit packed -> convert to 16-bit usable format
-# Picamera2 delivers unpacked RAW as uint16 typically
+print("RAW dtype:", raw.dtype)
+print("RAW shape:", raw.shape)
+
+# Convert to numpy array (should be uint16)
 raw_image = raw.astype(np.uint16)
 
-print("RAW shape:", raw_image.shape)
+# BGGR pattern (confirmed from your logs)
+# Blue pixels are at:
+# (row even, col even)
+blue = raw_image[0::2, 0::2]
 
-# Assume BGGR Bayer pattern (common for Sony sensors)
-# Pattern:
-# B G
-# G R
+# ---- Normalize for display ----
+# RAW is 10-bit -> scale to 8-bit
+blue_vis = (blue / 1023.0 * 255).astype(np.uint8)
 
-# Extract blue pixels
-blue_channel = raw_image[0::2, 0::2]
-
-# Normalize for visualization (scale to 8-bit)
-blue_vis = cv2.normalize(blue_channel, None, 0, 255, cv2.NORM_MINMAX)
-blue_vis = blue_vis.astype(np.uint8)
-
-# Save results
 cv2.imwrite("blue_channel.png", blue_vis)
 
-print("Blue channel saved as blue_channel.png")
+print("Saved blue_channel.png")
