@@ -74,3 +74,18 @@ print(np.unique(raw_image & 0b11))
 
 print("Max:", np.max(raw_image))
 print("Mean:", np.mean(raw_image))
+
+# Extract green pixels (BGGR)
+green1 = raw_image[0::2, 1::2]
+green2 = raw_image[1::2, 0::2]
+
+# Combine
+green = (green1 + green2) // 2
+
+# Normalize for display
+green_vis = cv2.normalize(green, None, 0, 255, cv2.NORM_MINMAX)
+green_vis = green_vis.astype(np.uint8)
+
+cv2.imwrite("green_channel.png", green_vis)
+
+print("Saved green_channel.png")
