@@ -39,7 +39,11 @@ print("dtype:", raw.dtype)
 
 # Extract BLUE pixels
 blue_pixels = raw[0::2, 0::2]
-
+print(type(blue_pixels))
+print(blue_pixels.ndim)
+print("max value ", raw.max())
+print("data type ", raw.dtype)
+print(raw.shape)
 # Normalize for display
 blue_norm = cv2.normalize(
     blue_pixels,
