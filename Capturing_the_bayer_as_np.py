@@ -27,6 +27,7 @@ request.release()
 
 print("RAW shape:", raw.shape)
 print("dtype:", raw.dtype)
+raw16 = raw.view(uint16)
 
 # ---------------------------------------------------
 # Bayer Pattern for Module 3 is usually:
