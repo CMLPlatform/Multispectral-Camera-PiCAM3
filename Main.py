@@ -2,6 +2,37 @@ from picamera2 import Picamera2
 import numpy as np
 import cv2
 import time
+import RPi.GPIO as GPIO
+
+#List Motor Parameters
+MOTOR_PIN1 = 17  # Blue   - 28BYJ48 pin 1
+MOTOR_PIN2 = 18  # Pink   - 28BYJ48 pin 2
+MOTOR_PIN3 = 27  # Yellow - 28BYJ48 pin 3
+MOTOR_PIN4 = 22  # Orange - 28BYJ48 pin 4
+MOTOR_PINS   = [MOTOR_PIN1, MOTOR_PIN2, MOTOR_PIN3, MOTOR_PIN4]
+MOTOR_SPEED  = 1200          # microseconds between steps
+COUNTS_PER_REV = 512         # steps per full revolution
+
+#Table for driving specyfic pins through bit patterns, 8 motor steps (half steps)
+LOOKUP = [
+    0b01000,   # step 0
+    0b01100,   # step 1
+    0b00100,   # step 2
+    0b00110,   # step 3
+    0b00010,   # step 4
+    0b00011,   # step 5
+    0b00001,   # step 6
+    0b01001,   # step 7
+]
+
+#Pin Setup using BMC pin numbers
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+for pin in MOTOR_PINS:
+    GPIO.setup(pin, GPIO.OUT)
+    GPIO.output(pin, GPIO.LOW)
+
+
 
 def capture_raw_data_as_array(filter="None"):
     # Capture request
@@ -85,12 +116,35 @@ def get_center_average(array, half_size=5):
     return average_value
 
 # def motor_controls
+def set_output(step: int) -> None:
+    """Write one lookup-table entry to the four motor pins."""
+    pattern = LOOKUP[step]
+    GPIO.output(MOTOR_PIN1, bool(pattern & 0b00001))  # bit 0
+    GPIO.output(MOTOR_PIN2, bool(pattern & 0b00010))  # bit 1
+    GPIO.output(MOTOR_PIN3, bool(pattern & 0b00100))  # bit 2
+    GPIO.output(MOTOR_PIN4, bool(pattern & 0b01000))  # bit 3
+
+
+def clockwise() -> None:
+    """One full electrical cycle in the clockwise direction (steps 7 → 0)."""
+    for i in range(7, -1, -1):
+        set_output(i)
+        time.sleep(MOTOR_SPEED / 1_000_000)   # convert µs → seconds
+
+
+def anticlockwise() -> None:
+    """One full electrical cycle in the anticlockwise direction (steps 0 → 7)."""
+    for i in range(8):
+        set_output(i)
+        time.sleep(MOTOR_SPEED / 1_000_000)
 
 # Initialize camera
 picam2 = Picamera2()
 
-# Create Variables
+# Create Variables for storing results
 result_list = []
+# Create a variable for the amount of steps motor took (positive value means clockwise steps
+position = 0
 
 # Configure RAW capture
 config = picam2.create_still_configuration(
@@ -115,9 +169,24 @@ blue_pixels  = arrays[f"blue_{filter_name}"]
 result_list.append(get_center_average(red_pixels))
 result_list.append(get_center_average(green_pixels))
 result_list.append(get_center_average(blue_pixels))
+picam2.stop()
 
 #MOVE THE MOTOR HERE <------
+move=0
+while move == 0:
+	if position < COUNTS_PER_REV/2:
+		clockwise()
+		position += 1
+	else:
+		print("move completed")
+		for pin in MOTOR_PINS:
+			GPIO.output(pin, GPIO.LOW)
+		move = 1
 
+
+picam2.configure(config)
+picam2.start()
+time.sleep(2)	
 # Capture and retrieve MORE arrays by updating the arrays dictionary
 arrays.update(capture_raw_data_as_array(filter="filter1"))
 
@@ -134,3 +203,14 @@ result_list.append(get_center_average(blue_pixels))
 
 
 print(result_list)
+
+while move == 1:
+	if position != 0:
+		anticlockwise()
+		position -= 1
+	else:
+		print("move completed")
+		for pin in MOTOR_PINS:
+			GPIO.output(pin, GPIO.LOW)
+		move = 0
+
