@@ -1,3 +1,5 @@
+import sys
+import pandas as pd
 from picamera2 import Picamera2
 import numpy as np
 import cv2
@@ -12,6 +14,20 @@ MOTOR_PIN4 = 22  # Orange - 28BYJ48 pin 4
 MOTOR_PINS   = [MOTOR_PIN1, MOTOR_PIN2, MOTOR_PIN3, MOTOR_PIN4]
 MOTOR_SPEED  = 1200          # microseconds between steps
 COUNTS_PER_REV = 512         # steps per full revolution
+
+# List Global Variables
+Calibration = 0
+data = {"Filters (nm)": [1, 2, 3]} 
+Final_data = pd.DataFrame(data)
+# Initialize camera
+picam2 = Picamera2() 
+# Create a variable for the amount of steps motor took (positive value means clockwise steps
+position = 0
+#Configure RAW capture
+config = picam2.create_still_configuration(
+    raw={"format": "SBGGR10"},
+    main={"size": (640, 640)}
+)
 
 #Table for driving specyfic pins through bit patterns, 8 motor steps (half steps)
 LOOKUP = [
@@ -28,6 +44,7 @@ LOOKUP = [
 #Pin Setup using BMC pin numbers
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
+
 for pin in MOTOR_PINS:
     GPIO.setup(pin, GPIO.OUT)
     GPIO.output(pin, GPIO.LOW)
@@ -138,63 +155,153 @@ def anticlockwise() -> None:
         set_output(i)
         time.sleep(MOTOR_SPEED / 1_000_000)
 
-# Initialize camera
-picam2 = Picamera2()
 
-# Create Variables for storing results
-result_list = []
-# Create a variable for the amount of steps motor took (positive value means clockwise steps
-position = 0
+def option_a():
+    global Calibration
+    global position 
+    print("\n Calibration in progress...")
+    result_list = []
+    filter_result_list = []
+    
+    #Load Camera Configuration and start the camera
+    picam2.configure(config)
+    picam2.start()
+    time.sleep(2)
+    
+    # Capture and retrieve arrays
+    arrays = capture_raw_data_as_array()
+    
+    # Access arrays by their filter-qualified names
+    filter_name = "None"
+    red_pixels   = arrays[f"red_{filter_name}"]
+    green_pixels = arrays[f"green_{filter_name}"]
+    blue_pixels  = arrays[f"blue_{filter_name}"]
+    
+    # Process each channel and collect centre averages
+    filter_result_list.append(get_center_average(red_pixels))
+    filter_result_list.append(get_center_average(green_pixels))
+    filter_result_list.append(get_center_average(blue_pixels))
+    # Take the highest Value to account for sensor sensitivity
+    correct_reading = max(filter_result_list)
+    result_list.append(correct_reading)
+    #Turn off the camera and move the motor
+    picam2.stop()
+    move=0
+    while move == 0:
+        if position < COUNTS_PER_REV/2:
+           clockwise()
+           position += 1
+        else:
+           print("move completed")
+           for pin in MOTOR_PINS:
+               GPIO.output(pin, GPIO.LOW)
+           move = 1
+	#Turn on the camera and take the next reading
+    picam2.configure(config)
+    picam2.start()
+    time.sleep(2)
+    filter_result_list = []
+    # Capture and retrieve MORE arrays by updating the arrays dictionary
+    arrays.update(capture_raw_data_as_array(filter="filter1"))
+    
+    # Access the next set of arrays by their filter-qualified names
+    filter_name = "filter1"
+    red_pixels   = arrays[f"red_{filter_name}"]
+    green_pixels = arrays[f"green_{filter_name}"]
+    blue_pixels  = arrays[f"blue_{filter_name}"]
+    # Process each channel and collect centre averages
+    filter_result_list.append(get_center_average(red_pixels))
+    filter_result_list.append(get_center_average(green_pixels))
+    filter_result_list.append(get_center_average(blue_pixels))
+    
+	# Take the highest Value to account for sensor sensitivity
+    correct_reading = max(filter_result_list)
+    result_list.append(correct_reading)
+    
+    #Turn off the camera and move the motor
+    picam2.stop()
+    move=0
+    while move == 0:
+        if position < COUNTS_PER_REV:
+           clockwise()
+           position += 1
+        else:
+           print("move completed")
+           for pin in MOTOR_PINS:
+               GPIO.output(pin, GPIO.LOW)
+           move = 1
+    #Turn on the camera and take the next reading
+    picam2.configure(config)
+    picam2.start()
+    time.sleep(2)
+    filter_result_list = []
+    # Capture and retrieve MORE arrays by updating the arrays dictionary
+    arrays.update(capture_raw_data_as_array(filter="filter2"))
+    
+    # Access the next set of arrays by their filter-qualified names
+    filter_name = "filter2"
+    red_pixels   = arrays[f"red_{filter_name}"]
+    green_pixels = arrays[f"green_{filter_name}"]
+    blue_pixels  = arrays[f"blue_{filter_name}"]
+    # Process each channel and collect centre averages
+    filter_result_list.append(get_center_average(red_pixels))
+    filter_result_list.append(get_center_average(green_pixels))
+    filter_result_list.append(get_center_average(blue_pixels))
 
-# Configure RAW capture
-config = picam2.create_still_configuration(
-    raw={"format": "SBGGR10"},
-    main={"size": (640, 640)}
-)
+	# Take the highest Value to account for sensor sensitivity
+    correct_reading = max(filter_result_list)
+    result_list.append(correct_reading)
+    while move == 1:
+          if position != 0:
+             anticlockwise()
+             position -= 1
+          else:
+             print("move completed")
+             for pin in MOTOR_PINS:
+                 GPIO.output(pin, GPIO.LOW)
+          move = 0
+    Calibration = 1
+    print("Calibration Complete")
+    Calibration_res = result_list
+    Final_data["Calibration"] = Calibration_res
 
-picam2.configure(config)
-picam2.start()
-time.sleep(2)
-
-# Capture and retrieve arrays
-arrays = capture_raw_data_as_array()
-
-# Access arrays by their filter-qualified names
-filter_name = "None"
-red_pixels   = arrays[f"red_{filter_name}"]
-green_pixels = arrays[f"green_{filter_name}"]
-blue_pixels  = arrays[f"blue_{filter_name}"]
-
-# Process each channel and collect centre averages
-result_list.append(get_center_average(red_pixels))
-result_list.append(get_center_average(green_pixels))
-result_list.append(get_center_average(blue_pixels))
-
-#MOVE THE MOTOR HERE <------
-move=0
-while move == 0:
-	if position < COUNTS_PER_REV:
-		clockwise()
-		position += 1
-	else:
-		for pin in MOTOR_PINS:
-			GPIO.output(pin, GPIO.LOW)
-		time.sleep(2)
-		move = 1
-	
-# Capture and retrieve MORE arrays by updating the arrays dictionary
-arrays.update(capture_raw_data_as_array(filter="filter1"))
-
-# Access the next set of arrays by their filter-qualified names
-filter_name = "filter1"
-red_pixels   = arrays[f"red_{filter_name}"]
-green_pixels = arrays[f"green_{filter_name}"]
-blue_pixels  = arrays[f"blue_{filter_name}"]
-
-# Process each channel and collect centre averages
-result_list.append(get_center_average(red_pixels))
-result_list.append(get_center_average(green_pixels))
-result_list.append(get_center_average(blue_pixels))
+def option_b():
+    print("\n Sampling...")
+    # --- Your Option B logic here ---
+    if Calibration == 1:
+        print("Sampling Complete")
+        Sample_res = [3,5,6]
+        Final_data["Sample"] = Sample_res
+        Final_data["Reflectance"] = Final_data["Sample"] / Final_data["Calibration"]
+        print(Final_data)
+    else:
+        print("Calibration Required")
 
 
-print(result_list)
+      
+def main():
+    while True:
+        print("\n" + "=" * 40)
+        print("  Please select an option:")
+        print()
+        print("  [C]  Calibrate - Calibrate the camera using the calibration plate")
+        print("  [T]  Test - Record the spectral profile of the sample")
+        print()
+        print("  Press Ctrl+C to quit")
+        print("=" * 40)
+
+        while True:
+            key = input("  Your choice: ").strip().lower()
+
+            if key == 'c':
+                option_a()
+                break
+            elif key == 't':
+                option_b()
+                break
+            else:
+                print(f"  Invalid input '{key}' — press c or t.")
+
+if __name__ == "__main__":
+    main()
+
