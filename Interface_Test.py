@@ -4,8 +4,8 @@ import pandas as pd
 Calibration = 0
 
 
-Final_data = {"Filters (nm)": [1, 2, 3]} 
-
+data = {"Filters (nm)": [1, 2, 3]} 
+Final_data = pd.DataFrame(data)
 def option_a():
     global Calibration 
     print("\n Calibration in progress...")
@@ -22,6 +22,7 @@ def option_b():
         print("Sampling Complete")
         Sample_res = [3,5,6]
         Final_data["Sample"] = Sample_res
+        Final_data["Reflectance"] = Final_data["Sample"] / Final_data["Calibration"]
         print(Final_data)
     else:
         print("Calibration Required")
