@@ -1,16 +1,28 @@
 import sys
+import pandas as pd
+
 Calibration = 0
+
+
+Final_data = {"Filters (nm)": [1, 2, 3]} 
+
 def option_a():
+    global Calibration 
     print("\n Calibration in progress...")
     # --- Your Option A logic here ---
     Calibration = 1
     print("Calibration Complete")
+    Calibration_res = [2,4,5]
+    Final_data["Calibration"] = Calibration_res
 
 def option_b():
     print("\n Sampling...")
     # --- Your Option B logic here ---
     if Calibration == 1:
         print("Sampling Complete")
+        Sample_res = [3,5,6]
+        Final_data["Sample"] = Sample_res
+        print(Final_data)
     else:
         print("Calibration Required")
 def main():
