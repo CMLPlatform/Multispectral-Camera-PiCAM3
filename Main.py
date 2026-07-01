@@ -6,19 +6,27 @@ import cv2
 import time
 import RPi.GPIO as GPIO
 
+
 #List Motor Parameters
 MOTOR_PIN1 = 17  # Blue   - 28BYJ48 pin 1
 MOTOR_PIN2 = 18  # Pink   - 28BYJ48 pin 2
 MOTOR_PIN3 = 27  # Yellow - 28BYJ48 pin 3
 MOTOR_PIN4 = 22  # Orange - 28BYJ48 pin 4
 MOTOR_PINS   = [MOTOR_PIN1, MOTOR_PIN2, MOTOR_PIN3, MOTOR_PIN4]
-MOTOR_SPEED  = 1200          # microseconds between steps
+MOTOR_SPEED  = 800          # microseconds between steps
 COUNTS_PER_REV = 512         # steps per full revolution
 
 # List Global Variables
 Calibration = 0
-data = {"Filters (nm)": [1, 2, 3]} 
+data = {"Filters (nm)": [400, 430, 465, 490, 520, 532, 550, 570, 590, 650, 670, 750, 810, 850, 940]} 
 Final_data = pd.DataFrame(data)
+filter_names = [400, 430, 465, 490, 520, 532, 550, 570, 590, 650, 670, 750, 810, 850, 940]
+stop_positions = []
+number_of_filters = 15
+for n in range (number_of_filters):
+	position = n*42.66*5
+	stop_positions.append(position)
+print(stop_positions)
 # Initialize camera
 picam2 = Picamera2() 
 # Create a variable for the amount of steps motor took (positive value means clockwise steps
@@ -48,8 +56,11 @@ GPIO.setwarnings(False)
 for pin in MOTOR_PINS:
 	GPIO.setup(pin, GPIO.OUT)
 	GPIO.output(pin, GPIO.LOW)
-
-
+	
+	
+#---------------------------------------------------------------------------
+#Function def starts here
+#---------------------------------------------------------------------------
 
 def capture_raw_data_as_array(filter="None"):
     # Capture request
@@ -157,114 +168,66 @@ def anticlockwise() -> None:
 
 
 def option_a():
-    global Calibration
-    global position 
-    print("\n Calibration in progress...")
-    result_list = []
-    filter_result_list = []
-    
-    #Load Camera Configuration and start the camera
-    picam2.configure(config)
-    picam2.start()
-    time.sleep(2)
-    
-    # Capture and retrieve arrays
-    arrays = capture_raw_data_as_array()
-    
-    # Access arrays by their filter-qualified names
-    filter_name = "None"
-    red_pixels   = arrays[f"red_{filter_name}"]
-    green_pixels = arrays[f"green_{filter_name}"]
-    blue_pixels  = arrays[f"blue_{filter_name}"]
-    
-    # Process each channel and collect centre averages
-    filter_result_list.append(get_center_average(red_pixels))
-    filter_result_list.append(get_center_average(green_pixels))
-    filter_result_list.append(get_center_average(blue_pixels))
-    # Take the highest Value to account for sensor sensitivity
-    correct_reading = max(filter_result_list)
-    result_list.append(correct_reading)
-    #Turn off the camera and move the motor
-    picam2.stop()
-    move=0
-    while move == 0:
-        if position < COUNTS_PER_REV/2:
-           clockwise()
-           position += 1
-        else:
-           print("move completed")
-           for pin in MOTOR_PINS:
-               GPIO.output(pin, GPIO.LOW)
-           move = 1
-	#Turn on the camera and take the next reading
-    picam2.configure(config)
-    picam2.start()
-    time.sleep(2)
-    filter_result_list = []
-    # Capture and retrieve MORE arrays by updating the arrays dictionary
-    arrays.update(capture_raw_data_as_array(filter="filter1"))
-    
-    # Access the next set of arrays by their filter-qualified names
-    filter_name = "filter1"
-    red_pixels   = arrays[f"red_{filter_name}"]
-    green_pixels = arrays[f"green_{filter_name}"]
-    blue_pixels  = arrays[f"blue_{filter_name}"]
-    # Process each channel and collect centre averages
-    filter_result_list.append(get_center_average(red_pixels))
-    filter_result_list.append(get_center_average(green_pixels))
-    filter_result_list.append(get_center_average(blue_pixels))
-    
-	# Take the highest Value to account for sensor sensitivity
-    correct_reading = max(filter_result_list)
-    result_list.append(correct_reading)
-    
-    #Turn off the camera and move the motor
-    picam2.stop()
-    move=0
-    while move == 0:
-        if position < COUNTS_PER_REV:
-           clockwise()
-           position += 1
-        else:
-           print("move completed")
-           for pin in MOTOR_PINS:
-               GPIO.output(pin, GPIO.LOW)
-           move = 1
-    #Turn on the camera and take the next reading
-    picam2.configure(config)
-    picam2.start()
-    time.sleep(2)
-    filter_result_list = []
-    # Capture and retrieve MORE arrays by updating the arrays dictionary
-    arrays.update(capture_raw_data_as_array(filter="filter2"))
-    
-    # Access the next set of arrays by their filter-qualified names
-    filter_name = "filter2"
-    red_pixels   = arrays[f"red_{filter_name}"]
-    green_pixels = arrays[f"green_{filter_name}"]
-    blue_pixels  = arrays[f"blue_{filter_name}"]
-    # Process each channel and collect centre averages
-    filter_result_list.append(get_center_average(red_pixels))
-    filter_result_list.append(get_center_average(green_pixels))
-    filter_result_list.append(get_center_average(blue_pixels))
+	global Calibration
+	global position
 
-	# Take the highest Value to account for sensor sensitivity
-    correct_reading = max(filter_result_list)
-    result_list.append(correct_reading)
-    picam2.stop()
-    while move == 1:
-          if position != 0:
-             anticlockwise()
-             position -= 1
-          else:
-             print("move completed")
-             for pin in MOTOR_PINS:
-                 GPIO.output(pin, GPIO.LOW)
-             move = 0
-    Calibration = 1
-    print("Calibration Complete")
-    Calibration_res = result_list
-    Final_data["Calibration"] = Calibration_res
+	print("\n Calibration in progress...")
+	result_list = []
+	filter_result_list = []
+    
+
+	for n in range(number_of_filters):
+		filter_result_list = []
+		filter_name = filter_names[n]
+		stop_position = stop_positions[n]
+		move=0
+		while move == 0:
+			if position < stop_position:
+			   clockwise()
+			   position += 1
+			else:
+			   print("move completed")
+			   for pin in MOTOR_PINS:
+				   GPIO.output(pin, GPIO.LOW)
+			   move = 1
+		
+		#Load Camera Configuration and start the camera
+		picam2.configure(config)
+		picam2.start()
+		time.sleep(2)
+		
+		# Capture and retrieve arrays
+		arrays = capture_raw_data_as_array(filter=filter_name)
+		
+		# Access arrays by their filter-qualified names
+		red_pixels   = arrays[f"red_{filter_name}"]
+		green_pixels = arrays[f"green_{filter_name}"]
+		blue_pixels  = arrays[f"blue_{filter_name}"]
+		
+		# Process each channel and collect centre averages
+		filter_result_list.append(get_center_average(red_pixels))
+		filter_result_list.append(get_center_average(green_pixels))
+		filter_result_list.append(get_center_average(blue_pixels))
+		# Take the highest Value to account for sensor sensitivity
+		correct_reading = max(filter_result_list)
+		result_list.append(correct_reading)
+		#Turn off the camera and move the motor
+		picam2.stop()
+			   
+	move = 1		   
+	while move == 1:
+		if position != 0:
+			anticlockwise()
+			position -= 1
+		else:
+			print("move completed")
+			for pin in MOTOR_PINS:
+				GPIO.output(pin, GPIO.LOW)
+			move = 0
+	Calibration = 1
+	print("Calibration Complete")
+	Calibration_res = result_list
+	Final_data["Calibration"] = Calibration_res
 
 def option_b():
 	print("\n Sampling...")
@@ -274,87 +237,46 @@ def option_b():
 		print("\n Sampling in progress...")
 		result_list = []
 		filter_result_list = []
-		#Load Camera Configuration and start the camera
-		picam2.configure(config)
-		picam2.start()
-		time.sleep(2)
-		# Capture and retrieve arrays
-		arrays = capture_raw_data_as_array()
-		# Access arrays by their filter-qualified names
-		filter_name = "None"
-		red_pixels   = arrays[f"red_{filter_name}"]
-		green_pixels = arrays[f"green_{filter_name}"]
-		blue_pixels  = arrays[f"blue_{filter_name}"]
-		# Process each channel and collect centre averages
-		filter_result_list.append(get_center_average(red_pixels))
-		filter_result_list.append(get_center_average(green_pixels))
-		filter_result_list.append(get_center_average(blue_pixels))
-		# Take the highest Value to account for sensor sensitivity
-		correct_reading = max(filter_result_list)
-		result_list.append(correct_reading)
-		#Turn off the camera and move the motor
-		picam2.stop()
-		move=0
-		while move == 0:
-			if position < COUNTS_PER_REV/2:
-				clockwise()
-				position += 1
-			else:
-				print("move completed")
-				for pin in MOTOR_PINS:
-					GPIO.output(pin, GPIO.LOW)
+	
+		for n in range(number_of_filters):
+			filter_result_list = []
+			filter_name = filter_names[n]
+			stop_position = stop_positions[n]
+			move=0
+			while move == 0:
+				if position < stop_position:
+					clockwise()
+					position += 1
+				else:
+					print("move completed")
+					for pin in MOTOR_PINS:
+						GPIO.output(pin, GPIO.LOW)
 					move = 1
-		#Turn on the camera and take the next reading
-		picam2.configure(config)
-		picam2.start()
-		time.sleep(2)
-		filter_result_list = []
-		# Capture and retrieve MORE arrays by updating the arrays dictionary
-		arrays.update(capture_raw_data_as_array(filter="filter1"))
-		# Access the next set of arrays by their filter-qualified names
-		filter_name = "filter1"
-		red_pixels   = arrays[f"red_{filter_name}"]
-		green_pixels = arrays[f"green_{filter_name}"]
-		blue_pixels  = arrays[f"blue_{filter_name}"]
-		# Process each channel and collect centre averages
-		filter_result_list.append(get_center_average(red_pixels))
-		filter_result_list.append(get_center_average(green_pixels))
-		filter_result_list.append(get_center_average(blue_pixels))
-		# Take the highest Value to account for sensor sensitivity
-		correct_reading = max(filter_result_list)
-		result_list.append(correct_reading)
-		#Turn off the camera and move the motor
-		picam2.stop()
-		move=0
-		while move == 0:
-			if position < COUNTS_PER_REV:
-				clockwise()
-				position += 1
-			else:
-				print("move completed")
-				for pin in MOTOR_PINS:
-					GPIO.output(pin, GPIO.LOW)
-				move = 1
-		#Turn on the camera and take the next reading
-		picam2.configure(config)
-		picam2.start()
-		time.sleep(2)
-		filter_result_list = []
-		# Capture and retrieve MORE arrays by updating the arrays dictionary
-		arrays.update(capture_raw_data_as_array(filter="filter2"))
-		# Access the next set of arrays by their filter-qualified names
-		filter_name = "filter2"
-		red_pixels   = arrays[f"red_{filter_name}"]
-		green_pixels = arrays[f"green_{filter_name}"]
-		blue_pixels  = arrays[f"blue_{filter_name}"]
-		# Process each channel and collect centre averages
-		filter_result_list.append(get_center_average(red_pixels))
-		filter_result_list.append(get_center_average(green_pixels))
-		filter_result_list.append(get_center_average(blue_pixels))
-		# Take the highest Value to account for sensor sensitivity
-		correct_reading = max(filter_result_list)
-		result_list.append(correct_reading)
-		picam2.stop()
+		
+			#Load Camera Configuration and start the camera
+			picam2.configure(config)
+			picam2.start()
+			time.sleep(2)
+			
+			# Capture and retrieve arrays
+			arrays = capture_raw_data_as_array(filter=filter_name)
+		
+			# Access arrays by their filter-qualified names
+			red_pixels   = arrays[f"red_{filter_name}"]
+			green_pixels = arrays[f"green_{filter_name}"]
+			blue_pixels  = arrays[f"blue_{filter_name}"]
+		
+			# Process each channel and collect centre averages
+			filter_result_list.append(get_center_average(red_pixels))
+			filter_result_list.append(get_center_average(green_pixels))
+			filter_result_list.append(get_center_average(blue_pixels))
+			# Take the highest Value to account for sensor sensitivity
+			correct_reading = max(filter_result_list)
+			result_list.append(correct_reading)
+			#Turn off the camera and move the motor
+			picam2.stop()
+			   
+		move = 1		   
 		while move == 1:
 			if position != 0:
 				anticlockwise()
@@ -371,6 +293,9 @@ def option_b():
 	else:
 		print("Calibration Required")
 
+#---------------------------------------------------------------------------
+#Function def ends here
+#---------------------------------------------------------------------------
 
       
 def main():
